@@ -446,7 +446,7 @@
 
 <!-- Video Background -->
 <div class="video-bg">
-  <video autoplay muted loop playsinline>
+  <video autoplay muted loop playsinline webkit-playsinline x5-playsinline x5-video-player-type="h5" x5-video-player-fullscreen="true">
     <source src="3.MP4" type="video/mp4">
   </video>
 </div>
@@ -572,22 +572,37 @@
   var prompt = document.getElementById('soundPrompt');
   var soundBtn = document.getElementById('soundBtn');
 
-  prompt.addEventListener('click', function() {
+  function enableSound() {
     video.muted = false;
     video.volume = 0.6;
+    video.play();
     prompt.classList.add('hidden');
     soundBtn.classList.remove('muted');
     soundBtn.classList.add('show');
-  });
+  }
 
-  soundBtn.addEventListener('click', function() {
+  function toggleSound() {
     if (video.muted) {
       video.muted = false;
+      video.play();
       soundBtn.classList.remove('muted');
     } else {
       video.muted = true;
       soundBtn.classList.add('muted');
     }
+  }
+
+  // Both click and touchend for mobile compatibility
+  prompt.addEventListener('click', enableSound);
+  prompt.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    enableSound();
+  });
+
+  soundBtn.addEventListener('click', toggleSound);
+  soundBtn.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    toggleSound();
   });
 })();
 </script>
