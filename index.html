@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>时光走廊</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --void: #080808;
+    --amber: #c9873a;
+    --amber-glow: #e8a84c;
+    --sepia: #d4b896;
+    --paper: #f2ead8;
+    --paper-dim: #a09580;
+    --frame-border: #1e1a14;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--void);
+    color: var(--paper);
+    font-family: 'LXGW WenKai', Georgia, 'Noto Serif SC', serif;
+    font-weight: 300;
+    line-height: 1.9;
+    overflow-x: hidden;
+  }
+
+  /* ========== VIDEO BACKGROUND ========== */
+  .video-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: -3;
+    overflow: hidden;
+  }
+
+  .video-bg video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    filter: sepia(0.3) contrast(1.1) brightness(0.45) saturate(0.7);
+  }
+
+  .video-bg::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(20, 12, 5, 0.55);
+    z-index: 1;
+  }
+
+  .video-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(8,8,8,0.7) 100%);
+    z-index: 2;
+  }
+
+  .video-scanlines {
+    position: fixed; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    animation: flicker 0.15s steps(2) infinite;
+    opacity: 0.5;
+  }
+
+  @keyframes flicker {
+    0% { opacity: 0.5; }
+    50% { opacity: 0.45; }
+    100% { opacity: 0.5; }
+  }
+
+  .video-grain {
+    position: fixed; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    animation: grainShift 0.5s steps(3) infinite;
+  }
+
+  @keyframes grainShift {
+    0% { transform: translate(0, 0); }
+    33% { transform: translate(-1px, 1px); }
+    66% { transform: translate(1px, -1px); }
+    100% { transform: translate(0, 0); }
+  }
+
+  /* ========== OPENING ========== */
+  .opening {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .opening::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(8,8,8,0.3) 0%, rgba(8,8,8,0.6) 100%);
+    z-index: 0;
+  }
+
+  .opening::after {
+    content: '';
+    position: absolute;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(201,135,58,0.12) 0%, transparent 70%);
+    animation: warmUp 3s ease-out forwards;
+    opacity: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .opening > * { position: relative; z-index: 1; }
+
+  @keyframes warmUp {
+    0% { opacity: 0; transform: scale(0.3); }
+    40% { opacity: 1; }
+    100% { opacity: 1; transform: scale(5); }
+  }
+
+  .opening-title {
+    font-size: clamp(2.2rem, 7vw, 5rem);
+    font-weight: 400;
+    color: var(--amber);
+    letter-spacing: 0.25em;
+    opacity: 0;
+    animation: reveal 2s ease 1s forwards;
+  }
+
+  .opening-sub {
+    font-size: clamp(0.85rem, 1.8vw, 1.15rem);
+    color: var(--paper-dim);
+    margin-top: 1.5rem;
+    letter-spacing: 0.15em;
+    opacity: 0;
+    animation: reveal 2s ease 1.8s forwards;
+  }
+
+  .scroll-cue {
+    position: absolute;
+    bottom: 3.5rem;
+    opacity: 0;
+    animation: reveal 1s ease 3s forwards;
+  }
+
+  .scroll-cue span {
+    display: block;
+    width: 1px; height: 40px;
+    background: linear-gradient(to bottom, var(--amber), transparent);
+    margin: 0 auto 0.6rem;
+    animation: drip 2.5s ease-in 4s infinite;
+  }
+
+  .scroll-cue p {
+    font-size: 0.7rem;
+    color: var(--paper-dim);
+    letter-spacing: 0.3em;
+  }
+
+  @keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes drip {
+    0%, 100% { opacity: 0.6; transform: scaleY(1); }
+    50% { opacity: 1; transform: scaleY(1.3); }
+  }
+
+  /* ========== BOOTH (timeline) ========== */
+  .booth {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+    position: relative;
+    background: linear-gradient(to bottom,
+      rgba(8,8,8,0.75) 0%,
+      rgba(8,8,8,0.55) 10%,
+      rgba(8,8,8,0.55) 90%,
+      rgba(8,8,8,0.75) 100%
+    );
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  .booth::before {
+    content: '';
+    position: absolute;
+    left: 28px; top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--amber) 8%, var(--amber) 92%, transparent);
+    opacity: 0.15;
+  }
+
+  @media (min-width: 769px) {
+    .booth { max-width: 800px; padding: 5rem 3rem 8rem; }
+    .booth::before { left: 50%; transform: translateX(-50%); }
+  }
+
+  /* ========== SCENE ========== */
+  .scene {
+    position: relative;
+    margin-bottom: 6rem;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+
+  .scene:last-child { margin-bottom: 0; }
+  .scene.visible { opacity: 1; }
+
+  .scene-time {
+    font-size: 0.72rem;
+    color: var(--amber);
+    letter-spacing: 0.25em;
+    margin-bottom: 1.2rem;
+    opacity: 0.7;
+    padding-left: 48px;
+  }
+
+  @media (min-width: 769px) {
+    .scene-time { text-align: center; padding-left: 0; }
+  }
+
+  /* Photo frame */
+  .frame {
+    position: relative;
+    margin-left: 48px;
+    background: #110e0a;
+    border: 1px solid var(--frame-border);
+    overflow: hidden;
+  }
+
+  @media (min-width: 769px) {
+    .frame { margin: 0 auto; max-width: 640px; }
+  }
+
+  .frame::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 10%; right: 10%;
+    height: 80px;
+    background: linear-gradient(to bottom, rgba(201,135,58,0.1), transparent);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 1s ease 0.3s;
+  }
+
+  .scene.visible .frame::before { opacity: 1; }
+
+  .frame::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(8,8,8,0.5) 100%);
+    pointer-events: none;
+  }
+
+  .frame-img {
+    width: 100%;
+    display: block;
+    filter: sepia(0.12) contrast(1.05);
+  }
+
+  /* Scene text */
+  .scene-text {
+    padding: 1.8rem 0 0;
+    margin-left: 48px;
+  }
+
+  @media (min-width: 769px) {
+    .scene-text {
+      margin: 0 auto;
+      max-width: 640px;
+      text-align: center;
+    }
+  }
+
+  .scene-title {
+    font-size: clamp(1.3rem, 3vw, 1.8rem);
+    font-weight: 400;
+    color: var(--amber-glow);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.08em;
+  }
+
+  .scene-desc {
+    font-size: 0.95rem;
+    color: var(--sepia);
+    line-height: 2;
+    opacity: 0.85;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  /* ========== CLOSING ========== */
+  .closing {
+    text-align: center;
+    padding: 8rem 2rem 12rem;
+    max-width: 560px;
+    margin: 0 auto;
+    opacity: 0;
+    transition: opacity 1.5s ease;
+    position: relative;
+    background: radial-gradient(ellipse at center, rgba(8,8,8,0.6) 0%, rgba(8,8,8,0.4) 100%);
+  }
+
+  .closing.visible { opacity: 1; }
+
+  .closing-line {
+    width: 40px; height: 1px;
+    background: var(--amber);
+    margin: 0 auto 3rem;
+    opacity: 0.4;
+  }
+
+  .closing-title {
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    font-weight: 400;
+    color: var(--amber);
+    letter-spacing: 0.12em;
+    margin-bottom: 1.5rem;
+  }
+
+  .closing-body {
+    font-size: 1rem;
+    color: var(--sepia);
+    line-height: 2.4;
+    opacity: 0.8;
+  }
+
+  .closing-sign {
+    margin-top: 3rem;
+    font-size: 1.05rem;
+    color: var(--amber);
+    opacity: 0.7;
+    letter-spacing: 0.1em;
+  }
+
+  /* ========== SOUND PROMPT ========== */
+  .sound-prompt {
+    position: fixed; inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(8,8,8,0.75);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    cursor: pointer;
+    transition: opacity 0.8s ease;
+  }
+
+  .sound-prompt.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sound-prompt-ring {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2px solid rgba(201,135,58,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulseRing 2s ease-in-out infinite;
+    margin-bottom: 1.5rem;
+  }
+
+  @keyframes pulseRing {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(201,135,58,0.2); }
+    50% { box-shadow: 0 0 0 20px rgba(201,135,58,0); }
+  }
+
+  .sound-prompt-ring svg { color: var(--amber); }
+
+  .sound-prompt-text {
+    font-size: 0.85rem;
+    color: var(--paper-dim);
+    letter-spacing: 0.2em;
+  }
+
+  /* ========== SOUND TOGGLE ========== */
+  .sound-btn {
+    position: fixed;
+    bottom: 2rem; right: 2rem;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(201,135,58,0.4);
+    background: rgba(8,8,8,0.85);
+    color: var(--amber);
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.3s, opacity 0.3s;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .sound-btn.show { opacity: 1; pointer-events: auto; }
+  .sound-btn:hover { border-color: var(--amber); }
+  .sound-btn .icon-off { display: none; }
+  .sound-btn.muted .icon-on { display: none; }
+  .sound-btn.muted .icon-off { display: block; }
+
+  /* ========== PROGRESS ========== */
+  .progress {
+    position: fixed;
+    top: 0; left: 0;
+    height: 2px;
+    background: var(--amber);
+    z-index: 100;
+    width: 0%;
+    opacity: 0.5;
+    transition: width 0.15s linear;
+  }
+
+  /* ========== REDUCED MOTION ========== */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+    .opening::before { opacity: 1; }
+    .opening::after { opacity: 1; transform: scale(5); }
+    .opening-title, .opening-sub, .scroll-cue { opacity: 1; }
+    .scene, .closing { opacity: 1; }
+    .video-scanlines { display: none; }
+    .video-grain { animation: none; }
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai:wght@300;400&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+<!-- Video Background -->
+<div class="video-bg">
+  <video autoplay muted loop playsinline>
+    <source src="3.MP4" type="video/mp4">
+  </video>
+</div>
+<div class="video-scanlines"></div>
+<div class="video-grain"></div>
+
+<div class="progress" id="progress"></div>
+
+<!-- ==================== OPENING ==================== -->
+<section class="opening">
+  <h1 class="opening-title">致 父 亲</h1>
+  <p class="opening-sub">二十年</p>
+  <div class="scroll-cue">
+    <span></span>
+    <p>向下</p>
+  </div>
+</section>
+
+<!-- ==================== 3 SCENES ==================== -->
+<div class="booth">
+
+  <!-- Scene 1: 2006 -->
+  <div class="scene">
+    <div class="scene-time">2006 · 冬</div>
+    <div class="frame">
+      <img class="frame-img" src="images/IMG_2782.JPG" alt="2006年，父亲抱着幼儿">
+    </div>
+    <div class="scene-text">
+      <h2 class="scene-title">开始的开始</h2>
+      <p class="scene-desc">
+        long long ago...
+      </p>
+    </div>
+  </div>
+
+  <!-- Scene 2: 童年 -->
+  <div class="scene">
+    <div class="scene-time">那些年 · 慢慢长大</div>
+    <div class="frame">
+      <img class="frame-img" src="images/IMG_2783.JPG" alt="父亲与孩子贴脸依偎">
+    </div>
+    <div class="scene-text">
+      <h2 class="scene-title">后来</h2>
+      <p class="scene-desc">
+      </p>
+    </div>
+  </div>
+
+  <!-- Scene 3: 南京大学 -->
+  <div class="scene">
+    <div class="scene-time">后来 · 你长大了</div>
+    <div class="frame">
+      <img class="frame-img" src="images/IMG_2784.JPG" alt="南京大学前合影">
+    </div>
+    <div class="scene-text">
+      <h2 class="scene-title"></h2>
+      <p class="scene-desc">
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== CLOSING ==================== -->
+<section class="closing" id="closing">
+  <div class="closing-line"></div>
+  <h2 class="closing-title">父亲节快乐</h2>
+  <p class="closing-body">
+    灿烂星空 谁是真的英雄<br>
+    平凡的人给我最多感动<br><br>
+    爸 你就是我的真心英雄
+  </p>
+  <p class="closing-sign">—— your son</p>
+</section>
+
+<!-- Sound Prompt -->
+<div class="sound-prompt" id="soundPrompt">
+  <div class="sound-prompt-ring">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  </div>
+  <span class="sound-prompt-text">点击开启声音</span>
+</div>
+
+<!-- Sound Toggle -->
+<button class="sound-btn muted" id="soundBtn" title="静音/取消静音">
+  <svg class="icon-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+  </svg>
+  <svg class="icon-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+    <line x1="23" y1="9" x2="17" y2="15"/>
+    <line x1="17" y1="9" x2="23" y2="15"/>
+  </svg>
+</button>
+
+<script>
+(function() {
+  'use strict';
+
+  var scenes = document.querySelectorAll('.scene');
+  var closing = document.getElementById('closing');
+
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) e.target.classList.add('visible');
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+  scenes.forEach(function(s) { io.observe(s); });
+  if (closing) io.observe(closing);
+
+  var bar = document.getElementById('progress');
+  window.addEventListener('scroll', function() {
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = h > 0 ? (window.scrollY / h * 100) + '%' : '0%';
+  }, { passive: true });
+
+  var video = document.querySelector('.video-bg video');
+  var prompt = document.getElementById('soundPrompt');
+  var soundBtn = document.getElementById('soundBtn');
+
+  prompt.addEventListener('click', function() {
+    video.muted = false;
+    video.volume = 0.6;
+    prompt.classList.add('hidden');
+    soundBtn.classList.remove('muted');
+    soundBtn.classList.add('show');
+  });
+
+  soundBtn.addEventListener('click', function() {
+    if (video.muted) {
+      video.muted = false;
+      soundBtn.classList.remove('muted');
+    } else {
+      video.muted = true;
+      soundBtn.classList.add('muted');
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
