@@ -571,39 +571,58 @@
   var video = document.querySelector('.video-bg video');
   var prompt = document.getElementById('soundPrompt');
   var soundBtn = document.getElementById('soundBtn');
+  var audioCtx = null;
+  var mediaSource = null;
+  var gainNode = null;
+  var soundOn = false;
+
+  function startAudio() {
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      mediaSource = audioCtx.createMediaElementSource(video);
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0.6;
+      mediaSource.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+    } catch (e) {}
+  }
 
   function enableSound() {
+    startAudio();
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
     video.muted = false;
-    video.volume = 0.6;
     video.play();
+    soundOn = true;
     prompt.classList.add('hidden');
     soundBtn.classList.remove('muted');
     soundBtn.classList.add('show');
   }
 
   function toggleSound() {
-    if (video.muted) {
-      video.muted = false;
-      video.play();
-      soundBtn.classList.remove('muted');
-    } else {
+    if (soundOn) {
       video.muted = true;
+      soundOn = false;
       soundBtn.classList.add('muted');
+    } else {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      video.muted = false;
+      soundOn = true;
+      soundBtn.classList.remove('muted');
     }
   }
 
-  // Both click and touchend for mobile compatibility
   prompt.addEventListener('click', enableSound);
-  prompt.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    enableSound();
-  });
-
   soundBtn.addEventListener('click', toggleSound);
-  soundBtn.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    toggleSound();
-  });
+
+  // WeChat / X5 browser compatibility
+  document.addEventListener('WeixinJSBridgeReady', function() {
+    video.play();
+  }, false);
 })();
 </script>
 
